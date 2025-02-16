@@ -1,0 +1,13 @@
+name: _code
+title: _code
+username: alex-stephenson
+account: alex-stephenson
+server: shinyapps.io
+hostUrl: https://api.shinyapps.io/v1
+appId: 13616714
+bundleId: 9560123
+url: https://alex-stephenson.shinyapps.io/_code/
+version: 1
+asMultiple: FALSE
+asStatic: FALSE
+ignoredFiles: .RData|_archive/01_Data Cleaning - REACH Somalia HSM DEC24.R|_archive/01_Data Cleaning - REACH Somalia HSM Mar24 260224 vDelete Cleanup - Copy1.R|_archive/05c_HSM Analysis Reformating_1903024 vOnly HH.R|_archive/05c_HSM Analysis Reformating_310124.R|01_Data Cleaning - Somalia HSM Dec24.R|02_Clog Duplicate Parent Column Alignment & Binary Updates - REACH Somalia HSM Mar24 260224.R|03_Create Clean Data & Align Clogs - REACH Somalia HSM Mar24 260224.R|04_Data Aggregation - REACH Somalia HSM Mar24 260224.R|04_Incorporation - Raw Clean Nov202023.R|05a1_KI Level Results Table - REACH Somalia HSM Mar24 260224.R|05a2_HSM Analysis Reformatting KI Level_2003024.R|05b1_HH Level Results Table - REACH Somalia HSM Mar24 260224.R|05b2_HSM Analysis Reformatting HH Level_2003024.R|deleted_surveys_consolidation - 290224.R|hsm_contacts_consolidation_171223.R|support_functions/01_Data Cleaning - Support Functions.R|support_functions/04_Data Aggregation - Support Functions.R|support_functions/05_Results Table - Support Functions.R|support_functions/06_downlad_audit_file.R|support_functions/06_metadata_checks.R

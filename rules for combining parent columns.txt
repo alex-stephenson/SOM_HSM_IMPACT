@@ -1,0 +1,25 @@
+rules for combining parent columns
+
+    child columns will always be correctly updated with 0s and 1s (and can look up others that don't show up in the clogs as needed)
+
+identify duplicates by making a "unique" ID of UUID & question
+
+tokenize and identify the items that don't appear in the other
+
+go through the child columns to identify the correct 0 or 1 for the choices
+
+    could also just go through all of the child columns and populate a new parent column from those?
+
+create the "correct" parent column remove the duplicate
+
+
+
+
+
+
+
+
+
+If there is a conflict between an "only selectable by itself" and another choice, always remove the "OSBI", turn the binary to zero, and keep the other choice
+
+C:\Users\reid.jackson\ACTED\IMPACT SOM - 01_REACH\Unit 1 - Intersectoral\SOM1901_HSM\03_Data\2023\03_December Round\04_data_cleaning\omar abdikarim - Clogs
