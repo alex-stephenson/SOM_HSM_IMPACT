@@ -1,42 +1,20 @@
-# REACH Somalia HSM DEC24 - Data Cleaning Script
-
-# Week 1
-# 3/4: run at 8:55am to produce clogs for 3/3 data collection
-# 3/5: run at 9:20am to produce clogs for 3/4 data collection
-# 3/6: run at 9:55am to produce clogs for 3/5 data collection
-# 3/7: run at 8:45am to produce clogs for 3/6 data collection
-
-# 3/10: run at 8:55am to produce clogs for 3/7, 3/8, 3/9 data collection
-# 3/11: run at 9:22am to produce clogs for 3/10 data collection
-# 3/12: runt at 4:00am to produce clogs for 3/11 data collection
-# 3/13: runt at 6:24am to produce clogs for 3/12 data collection
-# 3/14: runt at 6:52am to produce clogs for 3/13 data collection
-# 3/17: runt at 8:08am to produce clogs for 3/114,3/15, 3/16 data collection
-# 3/18: runt at 8:52am to produce clogs for 3/17 data collection
-# 3/19: runt at 8:12 am to produce clogs for 3/18 data collection
-
 ###########################################################
 ########################## Setup ##########################
 ###########################################################
 
+date_to_filter <- "2025-04-30"
+
+
 # start with a clean slate
 rm(list = ls())
 
-# set the working directory
-# load additional data cleaning functions
-
 # load up our packages
 library(cleaningtools)
-library(dplyr)
+library(tidyverse)
 library(readxl)
-library(stringr)
-library(purrr)
-library(naniar)
-library(hypegrammaR)
-library(lubridate)
-library(robotoolbox, quietly = T)
 library(ImpactFunctions)
 library(openxlsx)
+
 # get the timestamp to more easily keep track of different versions
 date_time_now <- format(Sys.time(), "%b_%d_%Y_%H%M%S")
 
@@ -44,17 +22,22 @@ date_time_now <- format(Sys.time(), "%b_%d_%Y_%H%M%S")
 ########################## Download the data from kobo ##########################
 #################################################################################
 
-# update this based on your details / project
-# kobo_user_name <- "abdirahmanaia"
-# kobo_pw <- "Lewandozki_44"
-# kobo_url <- "kobo.impact-initiatives.org"
-
 raw_kobo_data <- ImpactFunctions::get_kobo_data(asset_id = "amnDUBvDnga4UYnYU4g5kz", un = "abdirahmanaia")
 
-# write the raw data and read it back in for cleaning
-kobo_data_export_path <- paste0("../../03_Output/01_Raw_Data/HSM_Raw_Data_", date_time_now, ".xlsx")
+version_count <- n_distinct(raw_kobo_data$`__version__`)
+if (version_count > 1) {
+  print(" !!!!!!!!!! /n There are multiple versions of the tool in use /n !!!!!!!!!!!!!!!!!")
+}
+
+kobo_data_export_path <- paste0("03_output/01_raw_data/HSM_Raw_Data.xlsx")
 writexl::write_xlsx(raw_kobo_data, kobo_data_export_path)
 
+
+########## read in the tool ###########
+
+kobo_tool_name <- "02_input/DSRA_II_Tool.xlsx"
+kobo_survey <- read_excel(kobo_tool_name, sheet = "survey")
+kobo_choice <- read_excel(kobo_tool_name, sheet = "choices")
 
 ##############################################################################
 ######################### Start Processing the Data ##########################
@@ -62,35 +45,11 @@ writexl::write_xlsx(raw_kobo_data, kobo_data_export_path)
 
 # clean up the raw data before doing further processing
 data_in_processing <- raw_kobo_data %>%
-
-  # first week of data
-  #filter(as.Date(`_submission_time`) == '2025-01-01') %>%
-  # get rid of the unnamed columns at the end due to different versions. They all have "..." in them
-  # select(!matches('\\.\\.\\.'))\
-  
-  # we add a blank column called "comment" to store FO comments when correctly clogs
   mutate(comment = "",
          district = tolower(district)) %>%
-  
   dplyr::rename(survey_uuid = uuid,
          uuid = `_uuid`)
 
-
-version_count <- n_distinct(data_in_processing$`__version__`)
-
-if (version_count > 1) {
-  stop("There are multiple versions of the tool in use")
-}
-
-##############################################################################
-########################## Kobo Survey and Choices ###########################
-##############################################################################
-
-kobo_tool_name <- "../../00_tool/SOM_REACH_HSM_December_2024_Tool_Pilot_ver_AS_EDITS_v2.xlsx"
-
-# read in the survey questions / choices
-kobo_survey <- read_excel(kobo_tool_name, sheet = "survey")
-kobo_choice <- read_excel(kobo_tool_name, sheet = "choices")
 
 ###############################################################################
 ############################ FO / District Mapping ############################
@@ -108,11 +67,6 @@ fo_district_mapping <- read_excel("inputs/fo_base_assignment_1224.xlsx") %>%
 data_in_processing <- data_in_processing %>%
                         left_join(fo_district_mapping, by = "district") 
 
-
-# for testing purposes, assign "dummyFO" to districts without an FO
- data_in_processing <- data_in_processing %>%
-                         mutate_at(vars(fo_in_charge_for_code), ~replace_na(., "dummyFO"))
-
 ##############################################################################
 ############################ Remove "Bad" Surveys ############################
 ##############################################################################
@@ -124,157 +78,75 @@ data_in_processing <- data_in_processing %>%
  maxdur_delete <- 80
  
 # Remove as many surveys as we can before creating the cleaning logs. For example, if a survey took 180 minutes, we know its going to be deleted so we shouldn't waste any enumerator time having the correct issues
-
-audit_files <- robotoolbox::kobo_audit(x = "amnDUBvDnga4UYnYU4g5kz", progress = T)
+ kobo_data_metadata <- get_kobo_metadata(dataset = data_in_processing, un = "abdirahmanaia", asset_id = "aBfWuR6hn3cdMJDLRyTVKD")
  
-audit_files_length <- audit_files %>%
-  mutate(metadata_duration = (end_int - start_int ) / 60000)
+ data_in_processing <- kobo_data_metadata$df_and_duration
+ 
+ raw_metadata_length <- kobo_data_metadata$audit_files_length
+ 
+ write_rds(raw_metadata_length, "03_output/01_raw_data/raw_metadata.rds")
 
-audit_files_length_gps <- audit_files_length %>%
-  filter(!str_detect(node, "geo"))
+ data_in_processing <- data_in_processing %>%
+   mutate(length_valid = case_when(
+     interview_duration < mindur ~ "Too short",
+     interview_duration > maxdur ~ "Too long",
+     TRUE ~ "Okay"
+   ))
+ 
 
-iv_lengths <- audit_files_length_gps %>% 
-  group_by(`_id`) %>% 
-  dplyr::summarise(interview_duration = sum(metadata_duration, na.rm = T),
-            start_time_metadata = first(start))
+## produce an output for tracking how many surveys are being deleted
+ data_in_processing %>%
+   count(fo_in_charge, length_valid) %>%
+   pivot_wider(names_from = length_valid, values_from = n) %>%
+   mutate(Okay = replace_na(Okay, 0),
+          `Too long` = replace_na(`Too long`, 0),
+          `Too short` = replace_na(`Too short`, 0),
+          total = Okay + `Too long` + `Too short`) %>%
+   writexl::write_xlsx(., paste0('03_output/02_time_checks/time_check.xlsx')) 
 
-data_in_processing <- data_in_processing %>% 
-  left_join(iv_lengths) %>%
-  mutate(
-    length_valid = case_when(
-      interview_duration < mindur_delete ~ "Too short",
-      interview_duration > maxdur_delete ~ "Too long",
-      TRUE ~ "Okay"
-    ))
+ 
+ time_issue <- data_in_processing %>%
+   filter(length_valid != "Okay") %>% 
+   select(uuid, site_name, enum_name, interview_duration) %>%
+   mutate(comment = 'Interview length too short or too long')
+ 
+ surveys_to_remove_cck <- data_in_processing %>%
+   filter(not(is.na(ki_termination_reason))) %>%
+   select(uuid, site_name, enum_name, interview_duration) %>%
+   mutate(comment = "no KI consent/continue/knowledge")
 
+ no_community <- data_in_processing %>%
+   filter(community_in_settlement == "no") %>%
+   select(uuid, site_name, enum_name, interview_duration) %>%
+   mutate(comment = "no community in settlement")
+ 
+ last_visit <- data_in_processing %>% 
+   filter(ki_last_speak_to_residents == "more_than_a_month") %>% 
+   select(uuid, site_name, enum_name, interview_duration) %>%
+   mutate(comment = "Ki last visit > month")
+ 
+ all_deletions <- time_issue %>% 
+   bind_rows(surveys_to_remove_cck) %>% 
+   bind_rows(no_community) %>% 
+   bind_rows(last_visit) %>% 
+   distinct(.keep_all = T)
+ 
+ all_deletions %>% 
+   writexl::write_xlsx(., paste0("03_output/03_deletion_log/deletion_log.xlsx"))
+ 
+ ## filter only valid surveys and for the specific date
+ data_in_processing <- data_in_processing %>%
+   filter(! uuid %in% all_deletions$uuid) %>%
+   filter(today == date_to_filter)
+ 
 
-time_spent_question <- audit_files_length_gps %>% 
-  select(-node) %>%
-  left_join(data_in_processing %>%
-              select(`_id`, iv_length_valid = length_valid, interview_duration, enum_code, fo_in_charge_for_code), by = "_id") %>% 
-  left_join(kobo_survey %>% select(name, `label::English`), by = join_by("name" == "name")) %>% 
-  mutate(duration_by_time = end-start) %>%
-  select(`_id`, `label::English`, iv_length_valid, question_time_seconds= duration_by_time, enum_code, interview_duration, fo_in_charge_for_code, 'old-value', 'new-value')
-
-
-time_spent_file_path <- paste0("outputs/time_spent_", date_time_now, ".xlsx")
-time_spent_question %>%
-  write.xlsx(., time_spent_file_path)
-
-
-# define the time and timezone for surveys that are "too early" or "too late". We only accept surveys started after 6am and before 8pm
-time_zone <- "Africa/Nairobi"
-earliest_time <- with_tz(as.POSIXct("06:00:00", format = "%H:%M:%S"), tzone = time_zone)
-latest_time <- with_tz(as.POSIXct("20:00:00", format = "%H:%M:%S"), tzone = time_zone)
-
-
-# filter surveys where KI said no to consent/continue/knowledgeable (cck)
-surveys_to_remove_cck <- data_in_processing %>%
-                            filter(not(is.na(ki_termination_reason))) %>%
-                            mutate(delete_reason = "no KI consent/continue/knowledge")
-
-# remove the cck deletions from any other delete checks. The same survey may also fail other checks in this section of code, but it doesn't matter as long as its deleted
-cck_uuids <- surveys_to_remove_cck %>%
-                select(uuid) %>%
-                pull()
-
-# filter surveys where KI said no community in the specified settlement
-surveys_to_remove_no_community <- data_in_processing %>%
-                                    filter(!(uuid %in% cck_uuids) & 
-                                            (community_in_settlement == "no")) %>%
-                                    mutate(delete_reason = "no community in settlement")
-
-# remove the no community deletions from any other delete checks. The same survey may also fail other checks in this section of code, but it doesn't matter as long as its deleted
-no_community_uuids <- surveys_to_remove_no_community %>%
-                        select(uuid) %>%
-                        pull()
-
-# filter surveys where the face-to-face interviewed KI has not been to the settlement in over 30 days
-surveys_to_remove_last_visit <- data_in_processing %>%
-                                  filter(!(uuid %in% no_community_uuids) &
-                                         !(uuid %in% cck_uuids) &
-                                          (ki_last_speak_to_residents == "more_than_a_month")) %>%
-                                  mutate(delete_reason = "KI last visited >30 days ago")
-
-# remove the no community deletions from any other delete checks.  The same survey may also fail other checks in this section of code, but it doesn't matter as long as its deleted
-last_visit_uuids <- surveys_to_remove_last_visit %>%
-                          select(uuid) %>%
-                          pull()
-
-# filter surveys that are too short or too long
-surveys_to_remove_time <- data_in_processing %>%
-                            filter(!(uuid %in% last_visit_uuids) &
-                                   !(uuid %in% no_community_uuids) &
-                                   !(uuid %in% cck_uuids) &
-                                    (length_valid == "Too short" | length_valid == "Too long")) %>%
-                            mutate(delete_reason = "interview duration")
-
-# remove the too long/too short deletions from any other delete checks.  The same survey may also fail other checks in this section of code, but it doesn't matter as long as its deleted
-too_short_too_long_uuids <- surveys_to_remove_time %>%
-                                select(uuid) %>%
-                                pull()
-
-# too early or too late. deleting surveys that were submitted during odd hours of the day
-surveys_to_remove_start_early_late <- data_in_processing %>%
-                                          filter(!(uuid %in% last_visit_uuids) &
-                                                 !(uuid %in% no_community_uuids) &
-                                                 !(uuid %in% cck_uuids) &
-                                                 !(uuid %in% too_short_too_long_uuids) & 
-                                                  ((hour(ymd_hms(start_time_metadata, tz=Sys.timezone())) <= hour(earliest_time)) | (hour(ymd_hms(start_time_metadata, tz=Sys.timezone())) >= hour(latest_time)))
-                                                 ) %>% # we subtract 1 for yesterday as we are processing yesterday's clogs 
-                                          mutate(delete_reason = "start too early or too late")
-
-# combine all of the surveys we want to delete before creating clogs for the FOs to review
-combined_surveys_to_delete <- surveys_to_remove_cck %>%
-                                rbind(surveys_to_remove_no_community, surveys_to_remove_last_visit, surveys_to_remove_time, surveys_to_remove_start_early_late)
-
-# write the deleted surveys for safe keeping/the deletion log
-surveys_to_remove_export_path <- paste0("../../03_Output/02_Data_for_deletion/deleted_surveys_", date_time_now, ".xlsx")
-combined_surveys_to_delete %>% 
-  select(uuid, delete_reason) %>%
-  write.xlsx(surveys_to_remove_export_path)
-
-
-
-## now get the UUIDs provided by assessment that we need to remove, this is for oversampling or soft duplicate
-
-duplicate_and_oversampled_path <- r"(inputs/survey_deletion.xlsx)"
-
-duplicate_and_oversampled <- readxl::read_excel(duplicate_and_oversampled_path)  
-duplicate_and_oversampled_uuids <- duplicate_and_oversampled %>%
-  filter(Comment == "Oversampled settlement" | str_detect(Comment, "Soft duplicate")) %>%
-  pull(UUID)
-
-
-# get the list of deleted uuids and filter them out
-bad_uuids <- combined_surveys_to_delete %>%
-                pull(uuid) %>%
-  append(duplicate_and_oversampled_uuids)
-
-# keep on going with the good surveys
-data_in_processing <- data_in_processing %>%
-                        filter(!(uuid %in% bad_uuids))
-
-# before we run any clogs checks, we write the data not immediately deleted so that it can be process by the dashboard
-# FOs will use the dashboard to check their progress against district/settlement targets. This will inform them where to tell enumerators to seek further interviews
-dashboard_data_path <- paste0("outputs/dashboard/unchecked_data_for_dashboard_", date_time_now, ".xlsx")
-
-unchecked_clean_plus_deleted_data_for_dashboard <- data_in_processing %>%
-                                                      mutate(delete_reason = "not_deleted") %>%
-                                                      rbind(combined_surveys_to_delete)
-
-# write the dashboard data as an excel file
-unchecked_clean_plus_deleted_data_for_dashboard %>% write.xlsx(dashboard_data_path)
+ 
 
 ####################################################################################
 ########################## Define Checks for Logic Errors ##########################
 ####################################################################################
 
-# These checks will look for unintuitive data or data that is contradictory
-
-# Define the logic checks we will complete
-# See the description section below for an explanation
-check_list <- data.frame(
+ check_list <- data.frame(
                     name = c(
                     # logic checks on reason_moved
                     "moved_lack_of_rain_check",
@@ -387,27 +259,27 @@ check_list <- data.frame(
                     # single choice questions don't have child columns, just a parent column with text (i.e. no binaries)
                     
                     # logic checks on reason_moved
-                    "reason_moved, reason_moved/lack_of_rain, shocks, shocks/lack_of_rain_dryseason, shocks/lack_of_rain_rainseason",
-                    "reason_moved, reason_moved/flooding, shocks, shocks/flooding",
-                    "reason_moved, reason_moved/locusts_pests, shocks, shocks/locusts_pests",
-                    "reason_moved, reason_moved/human_disease_outbreak, shocks, shocks/human_disease_outbreak",
-                    "reason_moved, reason_moved/conflict_insecurity, reason_moved/evictions, reason_moved/unlawful_impediments, shocks, shocks/insecurity",
+                    "reason_moved/lack_of_rain, shocks/lack_of_rain_dryseason, shocks/lack_of_rain_rainseason",
+                    "reason_moved/flooding, shocks/flooding",
+                    "reason_moved/locusts_pests, shocks/locusts_pests",
+                    "reason_moved/human_disease_outbreak, shocks/human_disease_outbreak",
+                    "reason_moved/conflict_insecurity, reason_moved/evictions, reason_moved/unlawful_impediments, shocks/insecurity",
                 
-                    "reasons_cannot_move, reasons_cannot_move/too_elderly, groups_cannot_move, groups_cannot_move/elderly_women_60, groups_cannot_move/elderly_men_60",
-                    "reasons_cannot_move, reasons_cannot_move/physically_disabled, groups_cannot_move, groups_cannot_move/pwd",
-                    "reasons_cannot_move, reasons_cannot_move/clan_discrimination, groups_cannot_move, groups_cannot_move/minority_clans",
-                    "reasons_cannot_move, reasons_cannot_move/no_male_company, groups_cannot_move, groups_cannot_move/girls_under18, groups_cannot_move/adult_women_18_59, groups_cannot_move/elderly_women_60",
+                    "reasons_cannot_move/too_elderly, groups_cannot_move/elderly_women_60, groups_cannot_move/elderly_men_60",
+                    "reasons_cannot_move/physically_disabled, groups_cannot_move/pwd",
+                    "reasons_cannot_move/clan_discrimination, groups_cannot_move/minority_clans",
+                    "reasons_cannot_move/no_male_company, groups_cannot_move/girls_under18, groups_cannot_move/adult_women_18_59, groups_cannot_move/elderly_women_60",
                     
                     # logic checks on crop losses
-                    "reason_crop_loss, reason_crop_loss/lack_of_rain, shocks, shocks/lack_of_rain_dryseason, shocks/lack_of_rain_rainseason",
-                    "reason_crop_loss, reason_crop_loss/flooding, shocks, shocks/flooding",
-                    "reason_crop_loss, reason_crop_loss/locusts_pests, shocks, shocks/locusts_pests",
-                    "reason_crop_loss, reason_crop_loss/temp_too_high, reason_crop_loss/temp_too_low",
+                    "reason_crop_loss/lack_of_rain, shocks/lack_of_rain_dryseason, shocks/lack_of_rain_rainseason",
+                    "reason_crop_loss/flooding, shocks/flooding",
+                    "reason_crop_loss/locusts_pests, shocks/locusts_pests",
+                    "reason_crop_loss/temp_too_high, reason_crop_loss/temp_too_low",
                     
                     # logic checks on livestock decrease
-                    "reason_livestock_decrease, reason_livestock_decrease/lack_of_rain, shocks, shocks/lack_of_rain_dryseason, shocks/lack_of_rain_rainseason",
-                    "reason_livestock_decrease, reason_livestock_decrease/flooding, shocks, shocks/flooding",
-                    "reason_livestock_decrease, reason_livestock_decrease/livestock_disease_outbreak, shocks, shocks/livestock_disease_outbreak",
+                    "reason_livestock_decrease/lack_of_rain, shocks/lack_of_rain_dryseason, shocks/lack_of_rain_rainseason",
+                    "reason_livestock_decrease/flooding, shocks/flooding",
+                    "reason_livestock_decrease/livestock_disease_outbreak, shocks/livestock_disease_outbreak",
                     
                     # logic checks for education
                     "education_facility_available, average_time",
@@ -417,15 +289,13 @@ check_list <- data.frame(
                     "proportion_1317_attend_school_girls_past_4wks, barriers_access_education_girls_1317, barriers_access_education_girls_1317/no_barriers",
                     
                     # logic checks for protection
-                    "safety_concerns, safety_concerns/fgm, groups_concerns, groups_concerns/mostly_girls, groups_concerns/mostly_adult_women, groups_concerns/mostly_elderly_women"
+                    "safety_concerns/fgm, groups_concerns/mostly_girls, groups_concerns/mostly_adult_women, groups_concerns/mostly_elderly_women"
                     )
 )
 
 #################################################################################################
 ########################## excluded_questions Columns For Outlier Check ##########################
 ##################################################################################################
-
-# below we check numerical data for "outliers" - we exclude any questions with non-numerical answers and put the names of those questions into "excluded_questions"
 
 # we should exclude all questions from outlier checks that aren't integer response types (integer is the only numerical response type)
 outlier_excluded_questions <- kobo_survey %>%
@@ -446,7 +316,6 @@ group_by_fo <- data_in_processing %>%
                   dplyr::group_by(fo_in_charge_for_code)
 
 # run all of the logic checks on the data grouped by FO
-# we do this as each FO is responsible for specific districts / enumerators
 checked_data_by_fo <- group_by_fo %>%
                         dplyr::group_split() %>%
                         purrr::map(~ check_duplicate(dataset = . # run the duplicate unique identifier check
@@ -479,8 +348,7 @@ checked_data_by_fo <- group_by_fo %>%
                                      #           ) %>%
 
                                      # the only "other" option is for settlement
-                                     check_others(columns_to_check = c("settlement_other")
-                                                 ) %>%
+                                     check_others(columns_to_check = c("settlement_other")) %>%
 
                                      # conduct the logic checks  
                                      check_logical_with_list(list_of_check = check_list,
@@ -512,13 +380,6 @@ cleaning_log <- checked_data_by_fo %>%
 ############################### Write the Cleaning Logs ################################
 ########################################################################################
 
-# write an excel file summarizing the the data issues found. this will include 3 tabs
-
-# checked_dataset: the original dataset with 5 additional check columns (two for duration, one each for the 3 logic checks above)
-# cleaning_log: all of the issues spotted with the original value, question, uuid, and issue. Also some pretty colors
-# readme: explanations of different actions we could take to remedy the data issues found
-
-# write to each FO's cleaning log folder
 cleaning_log %>% purrr::map(~ create_xlsx_cleaning_log(.[], 
                                                        cleaning_log_name = "cleaning_log",
                                                        change_type_col = "change_type",
@@ -533,7 +394,7 @@ cleaning_log %>% purrr::map(~ create_xlsx_cleaning_log(.[],
                                                        sm_dropdown_type = "numerical",
                                                        kobo_survey = kobo_survey,
                                                        kobo_choices = kobo_choice,
-                                                       output_path = paste0("../04_data_cleaning/",
+                                                       output_path = paste0("../01_data_cleaning/",
                                                                             unique(.[]$checked_dataset$fo_in_charge_for_code),
                                                                             " - Clogs/",
                                                                             "cleaning_log_",
@@ -668,76 +529,6 @@ soft_per_enum <- group_by_enum %>%
 #                                      threshold = 10
 #   )
 #   )
-
-# recombine the similar survey data
-similar_surveys <- soft_per_enum %>%
-  purrr::map(~ .[["soft_duplicate_log"]]) %>%
-  purrr::map2(
-    .y = dplyr::group_keys(group_by_enum) %>% unlist(),
-    ~ dplyr::mutate(.x, enum = .y)
-  ) %>%
-  do.call(dplyr::bind_rows, .)
-
-similar_surveys_with_info <- similar_surveys %>%
-  left_join(data_in_processing, by = "uuid") %>%
-  select(fo_in_charge_for_code, district, settlement, ki_interview, start, end, uuid, issue, enum, num_cols_not_NA, total_columns_compared, num_cols_dnk, id_most_similar_survey, number_different_columns)
-
-similar_survey_raw_data <- data_in_processing %>%
-  filter(uuid %in% (similar_surveys_with_info$uuid))
-
-
-similar_survey_export_path <- paste0("../04_data_cleaning/_similar_survey_checks/similar_surveys_", date_time_now, ".xlsx")
-
-# create a workbook with our data
-wb <- createWorkbook()
-addWorksheet(wb, "similar_surveys")
-addWorksheet(wb, "similar_survey_raw_data")
-
-writeData(wb, 1, similar_surveys_with_info)
-writeData(wb, 2, similar_survey_raw_data)
-
-saveWorkbook(wb, similar_survey_export_path, overwrite = TRUE)
-
-
-
-
-####### Enumerator performance
-
-enum_data_raw <- unchecked_clean_plus_deleted_data_for_dashboard %>%
-  select(enum_code, today, district, region, length_valid, field_officer = fo_in_charge_for_code) %>%
-  mutate(region =
-           case_when(region == "Middle_Juba_Kismayo" ~ "Middle_Juba",
-                     region == "Middle_Juba_Baidoa" ~ "Middle_Juba",
-                     TRUE ~ "Middle_Juba"),
-         region = str_replace_all(region, "_", " "))
-
-
-enum_performance <- enum_data_raw %>%
-  count(field_officer, enum_code, length_valid) %>%
-  mutate(length_valid = 
-           case_when(
-             length_valid == 'Too short' ~ 'NO',
-             length_valid == 'Too long' ~ 'NO',
-             TRUE ~ "YES"
-           )) %>%
-  tidyr::pivot_wider(names_from = length_valid, names_prefix = "Interview_Valid: ", values_from = n, values_fill = 0) %>%
-  mutate(
-    "Percent Accepted" = (`Interview_Valid: YES` / (`Interview_Valid: NO` + `Interview_Valid: YES`)) * 100
-  )
-
-
-mean_per_day <- enum_data_raw %>%
-  group_by(field_officer, enum_code, today) %>%
-  summarise(n = n()) %>%
-  ungroup() %>%
-  group_by(field_officer, enum_code) %>%
-  summarise("Average per day" = mean(n))
-
-enum_performance <- enum_performance %>%
-  left_join(mean_per_day)
-
-
-
 
 
 #### outliers
