@@ -19,7 +19,7 @@ library(openxlsx)
 date_time_now <- format(Sys.time(), "%b_%d_%Y_%H%M%S")
 
 # ──────────────────────────────────────────────────────────────────────────────
-########################## Download the data from kobo ##########################
+# 1. Download the data from kobo 
 # ──────────────────────────────────────────────────────────────────────────────
 
 raw_kobo_data <- ImpactFunctions::get_kobo_data(asset_id = "amnDUBvDnga4UYnYU4g5kz", un = "abdirahmanaia") %>% 
@@ -48,7 +48,7 @@ geo_data <- readxl::read_excel("02_input/District_Region_Ref_Data.xlsx") %>%
   select(settlement_name = name, settlement = Pcode)
 
 # ──────────────────────────────────────────────────────────────────────────────
-######################### Start Processing the Data ##########################
+# 2. Start Processing the Data
 # ──────────────────────────────────────────────────────────────────────────────
 
 # clean up the raw data before doing further processing
@@ -61,7 +61,7 @@ data_in_processing <- raw_kobo_data %>%
 
 
 # ──────────────────────────────────────────────────────────────────────────────#
-############################ FO / District Mapping ############################
+# 3. FO / District Mapping
 # ──────────────────────────────────────────────────────────────────────────────#
 
 # join the Field Officer / District assignments 
@@ -77,7 +77,7 @@ data_in_processing <- data_in_processing %>%
                         left_join(fo_district_mapping, by = "district") 
 
 # ──────────────────────────────────────────────────────────────────────────────
-############################ Remove "Bad" Surveys ############################
+# 4. Remove "Bad" Surveys
 # ──────────────────────────────────────────────────────────────────────────────
 
  # set the minimum and maximum "reasonable" survey times. Anything outside of this will be flagged
@@ -152,7 +152,7 @@ data_in_processing <- data_in_processing %>%
  
 
 # ──────────────────────────────────────────────────────────────────────────────
-## Define Checks for Logic Errors 
+# 5. Define Checks for Logic Errors 
 # ──────────────────────────────────────────────────────────────────────────────
  
 
@@ -304,7 +304,7 @@ data_in_processing <- data_in_processing %>%
 )
 
 # ──────────────────────────────────────────────────────────────────────────────
-########################## excluded_questions Columns For Outlier Check 
+# 6. excluded_questions Columns For Outlier Check 
 # ──────────────────────────────────────────────────────────────────────────────
 
 # we should exclude all questions from outlier checks that aren't integer response types (integer is the only numerical response type)
@@ -317,7 +317,7 @@ outlier_excluded_questions <- kobo_survey %>%
 excluded_questions_in_data <- intersect(colnames(data_in_processing), outlier_excluded_questions)
 
 # ──────────────────────────────────────────────────────────────────────────────
-## Conduct the Checks for Data Issues
+# 7. Conduct the Checks for Data Issues
 # ──────────────────────────────────────────────────────────────────────────────
 
 
@@ -333,16 +333,16 @@ checked_data_by_fo <- group_by_fo %>%
                                                     ) %>%
                                      
                                      # check for outliers
-                                     # check_outliers(element_name = "checked_dataset",
-                                     #                kobo_survey = kobo_survey,
-                                     #                kobo_choices = kobo_choice,
-                                     #                cols_to_add_cleaning_log = NULL,
-                                     #                strongness_factor = 3,
-                                     #                minimum_unique_value_of_variable = NULL,
-                                     #                remove_choice_multiple = TRUE,
-                                     #                sm_separator = "/",
-                                     #                columns_not_to_check = c(excluded_questions_in_data, "interview_duration", "length_valid", "gps_latitude","gps_longitude","gps_altitude","gps_precision","_id","_index")
-                                     #                ) %>%
+                                      check_outliers(element_name = "checked_dataset",
+                                                     kobo_survey = kobo_survey,
+                                                     kobo_choices = kobo_choice,
+                                                     cols_to_add_cleaning_log = NULL,
+                                                     strongness_factor = 3,
+                                                     minimum_unique_value_of_variable = NULL,
+                                                     remove_choice_multiple = TRUE,
+                                                     sm_separator = "/",
+                                                     columns_not_to_check = c(excluded_questions_in_data, "interview_duration", "length_valid", "gps_latitude","gps_longitude","gps_altitude","gps_precision","_id","_index")
+                                                     ) %>%
                                      
                                      # this will flag (as opposed to deleting) surveys that were too long or to short
                                      check_duration(column_to_check = "interview_duration",
@@ -388,7 +388,7 @@ cleaning_log <- checked_data_by_fo %>%
 
 
 # ──────────────────────────────────────────────────────────────────────────────
-############################### Write the Cleaning Logs ########################
+# 8. Write the Cleaning Logs
 # ──────────────────────────────────────────────────────────────────────────────
 
 cleaning_log %>% purrr::map(~ create_xlsx_cleaning_log(.[], 
@@ -417,9 +417,9 @@ cleaning_log %>% purrr::map(~ create_xlsx_cleaning_log(.[],
 
 
 
-# ──────────────────────────────────────────────────────────────────────────────##################
-############################### Write the new contact information #################################
-# ──────────────────────────────────────────────────────────────────────────────##################
+# ────────────────────────────────────────────────────────────────────────────── 
+# 9. Write the new contact information
+# ────────────────────────────────────────────────────────────────────────────── 
 
 # each KI will be asked if they have other potential contacts for the HSM, those are grouped by FO similar to the clogs
 contact_data_by_fo <- group_by_fo %>%

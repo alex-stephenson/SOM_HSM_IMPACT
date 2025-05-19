@@ -10,9 +10,9 @@ clean_kobo_data <- read_excel("03_output/06_final_cleaned_data/SOM_HSM_Output.xl
 cleaning_log_final <- read_excel("03_output/07_combined_cleaning_log/combined_cleaning_log.xlsx")
 deletion_log_final <- read_excel("03_output/07_combined_cleaning_log/combined_deletion_log.xlsx")
 
-#######################################################################################
-############################## Review the cleaning logs ###############################
-#######################################################################################
+# ──────────────────────────────────────────────────────────────────────────────
+# 1. Review cleaning
+# ──────────────────────────────────────────────────────────────────────────────
 
 review_clog <- cleaningtools::review_cleaning_log(raw_kobo_data,
                                                   raw_data_uuid_column = "uuid",
@@ -25,9 +25,9 @@ review_clog <- cleaningtools::review_cleaning_log(raw_kobo_data,
 )
 
 
-#######################################################################################################
-######################## Check for discrepancies between clog and clean data ##########################
-#######################################################################################################
+# ──────────────────────────────────────────────────────────────────────────────
+# 2.Check for clog and data discrepancy
+# ──────────────────────────────────────────────────────────────────────────────
 
 review_cleaning <- review_cleaning(raw_kobo_data,
                                    raw_dataset_uuid_column = "uuid",
@@ -48,12 +48,9 @@ review_cleaning <- review_cleaning(raw_kobo_data,
 
 
 
-#### action everything #####
-
-all_files <- list.files(path = "01_cleaning_logs", recursive = TRUE, full.names = TRUE)
-
-file_list <- all_files %>%
-  keep(~ str_detect(.x, "/[^/]+_complete_validated/") & str_detect(.x, "cleaning_log.*\\.xlsx$") & !str_detect(.x, "report"))
+# ──────────────────────────────────────────────────────────────────────────────
+# 3. Produce an output with all the reviews
+# ──────────────────────────────────────────────────────────────────────────────
 
 # Function to read and convert all columns to character and adds a file path
 read_and_clean_uuid <- function(file, sheet) {

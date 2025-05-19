@@ -7,6 +7,10 @@ library(readxl)
 
 date_time_now <- format(Sys.time(), "%b_%d_%Y_%H%M%S")
 
+# ──────────────────────────────────────────────────────────────────────────────
+# 1. Read in all the data
+# ──────────────────────────────────────────────────────────────────────────────
+
 ## FO data
 fo_district_mapping <- read_excel("inputs/fo_base_assignment_1224.xlsx") %>%
   select(district_for_code, fo_in_charge_for_code) %>%
@@ -68,7 +72,9 @@ all_deletions <- bind_rows(all_dlogs, manual_dlog) %>%
 raw_kobo_data_nas <- raw_kobo_data %>%
   mutate(interview_duration = NA)
 
-## now apply the clog and the clog using cleaningtools code
+# ──────────────────────────────────────────────────────────────────────────────
+# 2. Create the clean data
+# ──────────────────────────────────────────────────────────────────────────────
 
 my_clean_data <- create_clean_data(raw_dataset = raw_kobo_data_nas,
                                    raw_data_uuid_column = "uuid",
@@ -97,7 +103,9 @@ my_clean_data <- my_clean_data_parentcol$data_with_fix_concat %>%
 cleaning_log_final <- cleaning_log %>% 
   filter(! uuid %in% all_deletions$uuid)
 
-## output everything
+# ──────────────────────────────────────────────────────────────────────────────
+# 4. Produce all the outputs
+# ──────────────────────────────────────────────────────────────────────────────
 
 all_clean_data <- list("cleaned_data" = my_clean_data, "raw_data" = raw_kobo_data)
 
@@ -121,7 +129,9 @@ all_deletions %>%
 
 
 
-############################################# soft duplicates #####################################################
+# ──────────────────────────────────────────────────────────────────────────────
+# 5. Review soft duplicates
+# ──────────────────────────────────────────────────────────────────────────────
 
 ## read in already approved ones
 exclusions <- read_excel("03_output/08_similar_survey_check/exclusions.xlsx")
