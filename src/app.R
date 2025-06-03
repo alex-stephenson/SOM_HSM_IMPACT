@@ -35,7 +35,7 @@ actual_burndown <- read_csv("03_output/10_dashboard_output/actual_burndown.csv")
 {
   # UI
   ui <- dashboardPage(
-    dashboardHeader(title = "DSRA II April 2025 Dashboard"),
+    dashboardHeader(title = "HSM May 2025 Dashboard"),
     dashboardSidebar(
       collapsed = TRUE,
       sidebarMenu(
@@ -112,8 +112,8 @@ actual_burndown <- read_csv("03_output/10_dashboard_output/actual_burndown.csv")
       
       # Ideal burndown data (linear decrease)
       ideal_burndown <- data.frame(
-        Day = 1:days,
-        Remaining_Tasks = seq(from = total_tasks, to = 0, length.out = days)
+        Day = 0:days,
+        Remaining_Tasks = seq(from = total_tasks, to = 0, length.out = days + 1)
       )
       
       ggplot() +

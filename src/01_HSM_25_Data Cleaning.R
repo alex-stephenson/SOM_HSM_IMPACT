@@ -2,11 +2,10 @@
 ########################## Setup ##########################
 # ──────────────────────────────────────────────────────────────────────────────
 
-date_to_filter <- "2024-12-22"
-
-
 # start with a clean slate
 rm(list = ls())
+
+date_to_filter <- "2025-06-03"
 
 # load up our packages
 library(cleaningtools)
@@ -14,15 +13,17 @@ library(tidyverse)
 library(readxl)
 library(ImpactFunctions)
 library(openxlsx)
-
+#devtools::install_github("alex-stephenson/ImpactFunctions")
 # get the timestamp to more easily keep track of different versions
 date_time_now <- format(Sys.time(), "%b_%d_%Y_%H%M%S")
+# install.packages("ImpactFunctions")
+#  install.packages("devtools")
 
 # ──────────────────────────────────────────────────────────────────────────────
 # 1. Download the data from kobo 
 # ──────────────────────────────────────────────────────────────────────────────
 
-raw_kobo_data <- ImpactFunctions::get_kobo_data(asset_id = "amnDUBvDnga4UYnYU4g5kz", un = "abdirahmanaia") %>% 
+raw_kobo_data <- ImpactFunctions::get_kobo_data(asset_id = "amqYCpvrmCdZaUGmWwrMMv", un = "abdirahmanaia") %>% 
   select(-uuid) %>% 
   rename(uuid = `_uuid`)
 
@@ -67,7 +68,7 @@ data_in_processing <- raw_kobo_data %>%
 # join the Field Officer / District assignments 
 
 # read in the FO/district mapping
-fo_district_mapping <- read_excel("inputs/fo_base_assignment_1224.xlsx") %>%
+fo_district_mapping <- read_excel("02_input/fo_base_assignment_1224.xlsx") %>%
                           select(district_for_code, fo_in_charge_for_code) %>%
                           dplyr::rename("district" = "district_for_code") %>%
                           mutate_all(tolower)
@@ -87,8 +88,7 @@ data_in_processing <- data_in_processing %>%
  maxdur_delete <- 80
  
 # Remove as many surveys as we can before creating the cleaning logs. For example, if a survey took 180 minutes, we know its going to be deleted so we shouldn't waste any enumerator time having the correct issues
- kobo_data_metadata <- get_kobo_metadata(dataset = data_in_processing, un = "abdirahmanaia", asset_id = "amnDUBvDnga4UYnYU4g5kz")
- 
+ kobo_data_metadata <- get_kobo_metadata(dataset = data_in_processing, un = "abdirahmanaia", asset_id = "amqYCpvrmCdZaUGmWwrMMv")
  data_in_processing <- kobo_data_metadata$df_and_duration
 
  raw_metadata_length <- kobo_data_metadata$audit_files_length
@@ -159,11 +159,11 @@ data_in_processing <- data_in_processing %>%
  check_list <- data.frame(
                     name = c(
                     # logic checks on reason_moved
-                    "moved_lack_of_rain_check",
-                    "moved_flood_check",
-                    "moved_pest_invasion_check",
-                    "moved_disease_outbreak_check",
-                    "moved_general_conflict_check",
+                    "moved_lack_of_rain_check_code",
+                    "moved_flood_check_code",
+                    "moved_pest_invasion_check_code",
+                    "moved_disease_outbreak_check_code",
+                    "moved_general_conflict_check_code",
                     
                     # logic checks for cannot move / cannot leave
                     "leave_elderly_check",
@@ -172,15 +172,15 @@ data_in_processing <- data_in_processing %>%
                     "leave_woman_check",
                 
                     # logic checks on crop losses
-                    "crop_loss_lack_of_rain_check",
-                    "crop_loss_flooding_check",
-                    "crop_loss_pest_invasion_check",
+                    "crop_loss_lack_of_rain_check_code",
+                    #"crop_loss_flooding_check",
+                    "crop_loss_pest_invasion_check_code",
                     "crop_loss_temp_check",
                 
                     # logic checks on livestock decrease
-                    "livestock_decrease_lack_of_rain_check",
-                    "livestock_decrease_flood_check",
-                    "livestock_decrease_disease_check",
+                    "livestock_decrease_lack_of_rain_check_code",
+                    "livestock_decrease_flood_check_code_code",
+                    "livestock_decrease_disease_check_code",
                 
                     # logic checks for education
                     "school_distance_travel_time_check",
@@ -210,7 +210,7 @@ data_in_processing <- data_in_processing %>%
                     
                     # logic checks on crop losses - could have to manually update binaries for shocks
                     "grepl(\"*lack_of_rain*\", reason_crop_loss) & !grepl(\"*lack_of_rain*\", shocks)",
-                    "grepl(\"*flood*\", reason_crop_loss) & !grepl(\"*flood*\", shocks)",
+                    #"grepl(\"*flood*\", reason_crop_loss) & !grepl(\"*flood*\", shocks)",
                     "grepl(\"*locusts*\", reason_crop_loss) & !grepl(\"*pest*\", shocks)",
                     "grepl(\"*temp_too_high*\", reason_crop_loss) & grepl(\"*temp_too_low*\", reason_crop_loss)",
                 
@@ -245,7 +245,7 @@ data_in_processing <- data_in_processing %>%
                     
                     # logic checks on crop losses
                     "reason_crop_loss includes lack_of_rain, but lack_of_rain was not selected in shocks",
-                    "reason_crop_loss includes flooding, but flooding was not selected in shocks",
+                    #"reason_crop_loss includes flooding, but flooding was not selected in shocks",
                     "reason_crop_loss includes pests/locusts, but pest/locust invasion was not selected in shocks",
                     "reason_crop_loss includes both temperature too high and too low",
                     
@@ -282,7 +282,7 @@ data_in_processing <- data_in_processing %>%
                     
                     # logic checks on crop losses
                     "reason_crop_loss/lack_of_rain, shocks/lack_of_rain_dryseason, shocks/lack_of_rain_rainseason",
-                    "reason_crop_loss/flooding, shocks/flooding",
+                    #"reason_crop_loss/flooding, shocks/flooding",
                     "reason_crop_loss/locusts_pests, shocks/locusts_pests",
                     "reason_crop_loss/temp_too_high, reason_crop_loss/temp_too_low",
                     
@@ -327,60 +327,51 @@ group_by_fo <- data_in_processing %>%
                   dplyr::group_by(fo_in_charge_for_code)
 
 # run all of the logic checks on the data grouped by FO
+# group the data by FO
+group_by_fo <- data_in_processing %>%
+  dplyr::group_by(fo_in_charge_for_code)
+
+# run all of the logic checks on the data grouped by FO
 checked_data_by_fo <- group_by_fo %>%
-                        dplyr::group_split() %>%
-                        purrr::map(~ check_duplicate(dataset = . # run the duplicate unique identifier check
-                                                    ) %>%
-                                     
-                                     # check for outliers
-                                      check_outliers(element_name = "checked_dataset",
-                                                     kobo_survey = kobo_survey,
-                                                     kobo_choices = kobo_choice,
-                                                     cols_to_add_cleaning_log = NULL,
-                                                     strongness_factor = 3,
-                                                     minimum_unique_value_of_variable = NULL,
-                                                     remove_choice_multiple = TRUE,
-                                                     sm_separator = "/",
-                                                     columns_not_to_check = c(excluded_questions_in_data, "interview_duration", "length_valid", "gps_latitude","gps_longitude","gps_altitude","gps_precision","_id","_index")
-                                                     ) %>%
-                                     
-                                     # this will flag (as opposed to deleting) surveys that were too long or to short
-                                     check_duration(column_to_check = "interview_duration",
-                                                    uuid_column = "uuid",
-                                                    log_name = "duration_log",
-                                                    lower_bound = mindur_flag,
-                                                    higher_bound = maxdur_flag
-                                                    ) %>% 
-                                     
-                                     # we turn this off when clogs are created
-                                     # check for PII to be deleted later
-                                     # check_pii(element_name = "checked_dataset",
-                                     #           uuid_column = "uuid"
-                                     #           ) %>%
-
-                                     # the only "other" option is for settlement
-                                     check_others(columns_to_check = c("settlement_other")) %>%
-
-                                     # conduct the logic checks  
-                                     check_logical_with_list(list_of_check = check_list,
-                                                             check_id_column = "name",
-                                                             check_to_perform_column = "check",
-                                                             columns_to_clean_column = "columns_to_clean",
-                                                             description_column = "description"
-                                                             )
-                                  )
+  dplyr::group_split() %>%
+  purrr::map(~ check_duplicate(dataset = . # run the duplicate unique identifier check
+   ) %>%
+    # this will flag (as opposed to deleting) surveys that were too long or to short
+    check_duration(column_to_check = "interview_duration",
+                   uuid_column = "uuid",
+                   log_name = "duration_log",
+                   lower_bound = mindur_flag,
+                   higher_bound = maxdur_flag
+    ) %>% 
+    
+    # we turn this off when clogs are created
+    # check for PII to be deleted later
+    # check_pii(element_name = "checked_dataset",
+    #           uuid_column = "uuid"
+    #           ) %>%
+    
+    # the only "other" option is for settlement
+    check_others(columns_to_check = c("settlement_other")) %>%
+    
+    # conduct the logic checks  
+    check_logical_with_list(list_of_check = check_list,
+                            check_id_column = "name",
+                            check_to_perform_column = "check",
+                            columns_to_clean_column = "columns_to_clean",
+                            description_column = "description"
+    )
+  )
 
 # Write the cleaning logs for each FO
 cleaning_log <- checked_data_by_fo %>%
-                  purrr::map(~ .[] %>%
-                              create_combined_log() %>% 
-                              add_info_to_cleaning_log(
-                                dataset = "checked_dataset",
-                                cleaning_log = "cleaning_log",
-                                information_to_add = c("settlement", "settlement_name", "district", "enum_code", "ki_name", "ki_phone_number", "comment")
-                              )
-                             )
-
+  purrr::map(~ .[] %>%
+               create_combined_log() %>% 
+               add_info_to_cleaning_log(
+                 dataset = "checked_dataset",
+                 cleaning_log = "cleaning_log",
+                 information_to_add = c("settlement", "settlement_name", "district", "enum_code", "ki_name", "ki_phone_number", "comment")
+               )
+  )
 
 # # the above code errors out if there are no clog entries (empty dataframe). If this is the case, we put in a filler of "ignore" to avoid the error (this is deleted in later R scripts)
 # cleaning_log[[3]]$cleaning_log <- cleaning_log[[3]]$cleaning_log %>%
@@ -462,30 +453,6 @@ group_by_fo %>%
                 contact_number_2 = referral_second
   ) %>% 
   writexl::write_xlsx(paste0("03_output/11_referral_data/all/all_contact_data_", date_time_now, ".xlsx"))
-
-
-
-#### figure out how to handle outliers still
-
-checked_data_by_fo <- group_by_fo %>%
-  dplyr::group_split() %>%
-  purrr::map(~ 
-  check_outliers(
-    dataset = .,
-    uuid_column = "uuid",
-    element_name = "checked_dataset",
-    kobo_survey = kobo_survey,
-    kobo_choices = kobo_choice,
-    cols_to_add_cleaning_log = NULL,
-    strongness_factor = 2,
-    minimum_unique_value_of_variable = 5,
-    remove_choice_multiple = TRUE,
-    sm_separator = "/",
-    columns_not_to_check = c(excluded_questions_in_data, "interview_duration","length_valid", "gps_latitude", "gps_longitude","gps_altitude", "gps_precision")
-  )
-)
-
-
 
 
 

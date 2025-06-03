@@ -42,7 +42,7 @@ print("----------DATA SUCCESSFULLY LOADED-----------------")
 
 
 ### FO Data
-fo_district_mapping <- read_excel("inputs/fo_base_assignment_1224.xlsx") %>%
+fo_district_mapping <- read_excel("02_input/fo_base_assignment_1224.xlsx") %>%
   select(district_name = district, "district" = district_for_code, "fo" = fo_in_charge_for_code) %>% 
   mutate(district = stringr::str_to_lower(district))
 
@@ -52,14 +52,13 @@ clean_data <- clean_data %>%
   
 
 #--------------------------------------------------------
-# Site level Completion
+# OPZ level Completion
 #--------------------------------------------------------
 
 
-sampling_df <- site_data %>% count(district, operational_zone, name = "Total_Surveys") %>% 
+sampling_df <- site_data %>% 
+  count(district, operational_zone, name = "Total_Surveys") %>% 
   left_join(fo_district_mapping)
-
-
 
 idp_count <- clean_data %>%
   mutate(district = tolower(district)) %>% 
@@ -74,6 +73,29 @@ KIIs_Done <- sampling_df %>%
 
 KIIs_Done %>%
   writexl::write_xlsx(., "03_output/10_dashboard_output/completion_report.xlsx")
+
+
+#--------------------------------------------------------
+# Site level Completion
+#--------------------------------------------------------
+
+sampling_df_site <- site_data %>% 
+  count(name, `label::Somali`, district, operational_zone, name = "Total_Surveys") %>% 
+  left_join(fo_district_mapping) %>% 
+  select(-district_name) %>% 
+  rename(site_name = `label::Somali`)
+
+idp_count_site <- clean_data %>%
+  mutate(district = tolower(district)) %>% 
+  count(settlement, name = "Surveys_Done") 
+
+sites_complete <- sampling_df_site %>% 
+  left_join(idp_count_site, by = join_by("name" == "settlement")) %>% 
+  mutate(Complete = ifelse(Surveys_Done >= Total_Surveys, "Yes", "No")) 
+
+sites_complete %>%
+  writexl::write_xlsx(., paste0("03_output/09_completion_report/site_level_completion_report_", today(), ".xlsx"))
+
 
 ## Completion by FO
 
@@ -102,6 +124,10 @@ actual_burndown <- clean_data %>%
   mutate(
     Remaining_Tasks = total_tasks - cumsum(Tasks_Completed)  # Calculate running total
   )
+
+day_zero <- data.frame(Day = 0, Tasks_Completed = 0, Remaining_Tasks = total_tasks)
+
+actual_burndown <- rbind(day_zero, actual_burndown)
 
 actual_burndown %>% 
   write_csv(., "03_output/10_dashboard_output/actual_burndown.csv")
@@ -148,9 +174,7 @@ enum_performance %>%
 
 deploy_app_input <- list.files(full.names = T, recursive = T) %>%
   keep(~ str_detect(.x, "03_output/10_dashboard_output/enum_performance.csv") 
-       | str_detect(.x, "03_output/10_dashboard_output/actual_burndown.csv")
-       | str_detect(.x, "03_output/10_dashboard_output/completion_by_FO.csv")
-       | str_detect(.x, "03_output/09_completion_report/completion_report.xlsx")
+       | str_detect(.x, "03_output/10_dashboard_output")
        | str_detect(.x, "app.R")
        
   )

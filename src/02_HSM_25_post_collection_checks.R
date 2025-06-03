@@ -12,7 +12,7 @@ date_time_now <- format(Sys.time(), "%b_%d_%Y_%H%M%S")
 # ──────────────────────────────────────────────────────────────────────────────
 
 ## FO data
-fo_district_mapping <- read_excel("inputs/fo_base_assignment_1224.xlsx") %>%
+fo_district_mapping <- read_excel("02_input/fo_base_assignment_1224.xlsx") %>%
   select(district_for_code, fo_in_charge_for_code) %>%
   dplyr::rename("district" = "district_for_code") %>%
   mutate_all(tolower)
@@ -50,23 +50,15 @@ read_and_clean <- function(file, sheet) {
 # Read and combine all files into a single dataframe
 cleaning_logs <- map_dfr(file_list, sheet = 'cleaning_log', read_and_clean)
 
-cleaning_logs <- cleaning_logs %>%
-  filter(!is.na(change_type)) ### this needs taking out at the end
-
 ## also check all dlogs
 
 deletion_exclusions <- read_xlsx("03_output/08_similar_survey_check/exclusions.xlsx")
 
 all_dlogs <- readxl::read_excel(r"(03_output/03_deletion_log/deletion_log.xlsx)", col_types = "text")
 manual_dlog <- readxl::read_excel("03_output/04_deletion_log_manual/HSM_Manual_Deletion_Log.xlsx", col_types = "text")
-cleaning_log_deletions <- cleaning_logs %>% 
-  filter(change_type == "remove_survey") %>% 
-  mutate(interview_duration = "") %>% 
-  select(uuid, settlement, enum_code,interview_duration, comment = issue)
 
-all_deletions <- bind_rows(all_dlogs, manual_dlog) %>% 
-  bind_rows(cleaning_log_deletions) %>% 
-  filter(! uuid %in% deletion_exclusions$uuid)
+
+
 
 
 raw_kobo_data_nas <- raw_kobo_data %>%
@@ -76,32 +68,57 @@ raw_kobo_data_nas <- raw_kobo_data %>%
 # 2. Create the clean data
 # ──────────────────────────────────────────────────────────────────────────────
 
-my_clean_data <- create_clean_data(raw_dataset = raw_kobo_data_nas,
-                                   raw_data_uuid_column = "uuid",
-                                   cleaning_log = cleaning_logs, 
-                                   cleaning_log_uuid_column = "uuid",
-                                   cleaning_log_question_column = "question",
-                                   cleaning_log_new_value_column = "new_value",
-                                   cleaning_log_change_type_column = "change_type")
+if (! is_empty(file_list)) {
+  
+  cleaning_logs <- cleaning_logs %>%
+    filter(!is.na(change_type))
+  
+  cleaning_log_deletions <- cleaning_logs %>% 
+    filter(change_type == "remove_survey") %>% 
+    mutate(interview_duration = "") %>% 
+    select(uuid, settlement, enum_code,interview_duration, comment = issue)
+  
+  all_deletions <- bind_rows(all_dlogs, manual_dlog) %>% 
+    bind_rows(cleaning_log_deletions) %>% 
+    filter(! uuid %in% deletion_exclusions$uuid)
 
-my_clean_data_parentcol <- recreate_parent_column(dataset = my_clean_data,
-                                                  uuid_column = "uuid",
-                                                  kobo_survey = kobo_survey,
-                                                  kobo_choices = kobo_choice,
-                                                  sm_separator = "/", 
-                                                  cleaning_log_to_append = cleaning_logs)
+  my_clean_data <- create_clean_data(raw_dataset = raw_kobo_data_nas,
+                                     raw_data_uuid_column = "uuid",
+                                     cleaning_log = cleaning_logs, 
+                                     cleaning_log_uuid_column = "uuid",
+                                     cleaning_log_question_column = "question",
+                                     cleaning_log_new_value_column = "new_value",
+                                     cleaning_log_change_type_column = "change_type")
+  
+  my_clean_data_parentcol <- recreate_parent_column(dataset = my_clean_data,
+                                                    uuid_column = "uuid",
+                                                    kobo_survey = kobo_survey,
+                                                    kobo_choices = kobo_choice,
+                                                    sm_separator = "/", 
+                                                    cleaning_log_to_append = cleaning_logs)
+  
+  
+  
+  cleaning_log <- my_clean_data_parentcol$cleaning_log
+  
+  my_clean_data <- my_clean_data_parentcol$data_with_fix_concat %>%
+    filter(! uuid %in% all_deletions$uuid) %>% 
+    left_join(geo_data) %>% 
+    relocate(settlement_name, .after = settlement) 
+  
+  cleaning_log_final <- cleaning_log %>% 
+    filter(! uuid %in% all_deletions$uuid)
+  } else {
+    
+    all_deletions <- bind_rows(all_dlogs, manual_dlog) %>% 
+      filter(! uuid %in% deletion_exclusions$uuid)
+    
+    my_clean_data <- raw_kobo_data %>% 
+      filter(! uuid %in% all_deletions$uuid)
+    
+    cleaning_log_final <- tibble(empty = 0)
 
-
-
-cleaning_log <- my_clean_data_parentcol$cleaning_log
-
-my_clean_data <- my_clean_data_parentcol$data_with_fix_concat %>%
-  filter(! uuid %in% all_deletions$uuid) %>% 
-  left_join(geo_data) %>% 
-  relocate(settlement_name, .after = settlement)
-
-cleaning_log_final <- cleaning_log %>% 
-  filter(! uuid %in% all_deletions$uuid)
+  }
 
 # ──────────────────────────────────────────────────────────────────────────────
 # 4. Produce all the outputs
@@ -156,7 +173,7 @@ soft_per_enum <- group_by_enum %>%
                                      idnk_value = "dnk",
                                      sm_separator = "/",
                                      log_name = "soft_duplicate_log",
-                                     threshold = 5
+                                     threshold = 7
   )
   )
 
